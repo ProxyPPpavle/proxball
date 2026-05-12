@@ -155,14 +155,16 @@ export default function App() {
   };
 
   const handleJoin = async () => {
-    const targetId = selectedRoom || manualId.trim();
+    let targetId = selectedRoom || manualId.trim().toUpperCase();
     if (!targetId) return;
+    if (!targetId.startsWith('PB-')) targetId = 'PB-' + targetId;
+    
     setIsHost(false);
     try {
       const id = await initNetwork({ playerName, isHost: false, targetPeerId: targetId, onMsg: handleNetworkMessage });
       setPeerId(id);
       setScreen('lobby');
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert("Stadium not found! Check the code."); }
   };
 
   const handleMoveToTeam = (team) => {
@@ -295,9 +297,11 @@ export default function App() {
 
       {screen === 'lobby' && (
         <div className="lobby-view">
-          <div style={{textAlign:'center', marginBottom: '15px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)'}}>
-            <div style={{fontSize: '10px', opacity: 0.5, letterSpacing: '1px'}}>STADIUM ID (SHARE THIS)</div>
-            <div style={{fontSize: '14px', fontWeight: '800', color: 'var(--accent)', cursor: 'pointer'}} onClick={() => { navigator.clipboard.writeText(peerId); alert("ID Copied!"); }}>{peerId}</div>
+          <div style={{textAlign:'center', marginBottom: '15px', background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.2)'}}>
+            <div style={{fontSize: '10px', opacity: 0.5, letterSpacing: '2px', marginBottom: '5px'}}>STADIUM CODE (SHARE THIS)</div>
+            <div style={{fontSize: '32px', fontWeight: '900', color: 'var(--accent)', cursor: 'pointer', letterSpacing: '8px'}} onClick={() => { navigator.clipboard.writeText(peerId.replace('PB-','')); alert("Code Copied!"); }}>
+              {peerId ? peerId.replace('PB-','') : '---'}
+            </div>
           </div>
           <div className="teams-grid">
             {['red', 'bench', 'blue'].map(t => (
