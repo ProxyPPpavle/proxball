@@ -6,8 +6,14 @@ let connections = {};
 
 export const initNetwork = ({ playerName, isHost, targetPeerId, onMsg, password }) => {
   return new Promise((resolve, reject) => {
-    peer = new Peer('PB-' + Math.random().toString(36).substring(2, 6).toUpperCase(), {
-      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+    peer = new Peer('PB-' + Math.random().toString(36).substring(2, 7).toUpperCase(), {
+      config: { 
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun.relay.metered.ca:80' } // Additional STUN for mobile
+        ] 
+      }
     });
 
     peer.on('open', id => {

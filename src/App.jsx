@@ -63,31 +63,59 @@ export default function App() {
     return () => window.removeEventListener('proxball-goal-ui', onGoalUi);
   }, []);
 
+  // GLOBAL DISCOVERY SYSTEM (P2P Hub)
   useEffect(() => {
-    const interval = setInterval(() => {
-      const storedRooms = JSON.parse(localStorage.getItem('proxball_rooms') || '{}');
-      const now = Date.now();
-      const activeRooms = {};
-      Object.keys(storedRooms).forEach(id => {
-        if (now - storedRooms[id].lastUpdate < 5000) activeRooms[id] = storedRooms[id];
+    let hubConn = null;
+    let localHub = null;
+    const HUB_ID = 'PB-GLOBAL-LOBBY-HUB-v1';
+
+    const startDiscovery = async () => {
+      const p = new Peer(HUB_ID, { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+      
+      p.on('open', () => {
+        // I am the HUB!
+        localHub = p;
+        const globalRooms = {};
+        p.on('connection', c => {
+          c.on('data', data => {
+            if (data.type === 'register-room') {
+              globalRooms[c.peer] = { ...data.room, lastUpdate: Date.now() };
+            } else if (data.type === 'get-rooms') {
+              // Cleanup old rooms
+              const now = Date.now();
+              Object.keys(globalRooms).forEach(id => { if (now - globalRooms[id].lastUpdate > 15000) delete globalRooms[id]; });
+              c.send({ type: 'rooms-list', rooms: globalRooms });
+            }
+          });
+        });
       });
-      setRooms(activeRooms);
-      if (isHost && peerId) {
-        const myRoom = activeRooms[peerId] || { 
-          id: peerId, 
-          roomName, 
-          hostName: playerName, 
-          hasPassword: !!password,
-          playerCount: Object.keys(playersRef.current).length
-        };
-        myRoom.lastUpdate = now;
-        myRoom.playerCount = Object.keys(playersRef.current).length;
-        activeRooms[peerId] = myRoom;
-        localStorage.setItem('proxball_rooms', JSON.stringify(activeRooms));
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [isHost, peerId, playerName, roomName, password]);
+
+      p.on('error', (err) => {
+        if (err.type === 'unavailable-id') {
+          // Hub already exists, connect as client
+          const clientPeer = new Peer({ config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+          clientPeer.on('open', () => {
+            const conn = clientPeer.connect(HUB_ID);
+            hubConn = conn;
+            const interval = setInterval(() => {
+              if (conn.open) {
+                conn.send({ type: 'get-rooms' });
+                if (isHost && peerId) {
+                  conn.send({ type: 'register-room', room: { id: peerId, roomName, hostName: playerName, playerCount: Object.keys(playersRef.current).length } });
+                }
+              }
+            }, 3000);
+            conn.on('data', data => {
+              if (data.type === 'rooms-list') setRooms(data.rooms);
+            });
+            return () => clearInterval(interval);
+          });
+        }
+      });
+    };
+
+    startDiscovery();
+  }, [isHost, peerId, playerName, roomName]);
 
   const handleNetworkMessage = (msg, senderPeerId) => {
     if (msg.type === 'guest-joined') {
