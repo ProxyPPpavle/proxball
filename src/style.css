@@ -1,0 +1,403 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --bg-green: #567d46;
+  --bg-stripe: #4d703e;
+  --panel-bg: #1a212c;
+  --accent-red: #ff4b4b;
+  --accent-blue: #3b82f6;
+  --text-white: #ffffff;
+  --text-gray: #a0aec0;
+  --button-blue: #2c3e50;
+  --button-hover: #34495e;
+  --input-bg: #2d3748;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-green);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--bg-green),
+    var(--bg-green) 100px,
+    var(--bg-stripe) 100px,
+    var(--bg-stripe) 200px
+  );
+  color: var(--text-white);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* HaxBall Styled Panels */
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid #000;
+  border-radius: 8px;
+  padding: 30px;
+  width: 100%;
+  max-width: 550px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+h1 {
+  font-weight: 700;
+  font-size: 1.5rem;
+  margin: 0 0 20px 0;
+  text-align: center;
+  color: var(--text-white);
+  border-bottom: 2px solid var(--accent-red);
+  padding-bottom: 10px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  color: var(--text-white);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Form Elements */
+.input-group { margin-bottom: 20px; }
+.input-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--text-gray);
+  text-align: left; /* Align labels left as requested */
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  padding: 12px 15px;
+  color: var(--text-white);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left; /* Input text left-aligned */
+}
+
+input:focus { outline: none; border-color: #718096; background: #334155; }
+
+/* Server List */
+.server-box {
+  background: #000;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+/* Updated server header for vertical centering */
+.server-header {
+  background: #111;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  border-bottom: 1px solid #333;
+  height: 50px;
+  line-height: 50px;
+}
+
+.server-list {
+  max-height: 250px;
+  overflow-y: auto;
+  background: #000;
+}
+
+.server-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #2d3748;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  transition: background 0.1s;
+}
+
+/* Horizontal Buttons */
+.button-group { 
+  display: flex; 
+  flex-direction: row; /* Horizontal as requested */
+  gap: 10px; 
+  justify-content: center;
+  margin-top: 20px;
+}
+
+button {
+  padding: 10px 20px;
+  border-radius: 4px;
+  border: 1px solid #000;
+  font-weight: 600;
+  font-size: 12px; /* Smaller as requested */
+  cursor: pointer;
+  background: var(--button-blue);
+  color: var(--text-white);
+  transition: all 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 1 auto; /* Don't grow to full width */
+  min-width: 120px;
+}
+
+button:hover:not(:disabled) { background: var(--button-hover); }
+.btn-primary { background: #2f855a; } /* Green for primary */
+
+/* Lobby */
+.lobby-view { width: 95%; max-width: 1100px; display: flex; flex-direction: column; gap: 20px; }
+.teams-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+
+.team-card {
+  background: var(--panel-bg);
+  border: 1px solid #000;
+  border-radius: 4px;
+  min-height: 450px;
+  display: flex;
+  flex-direction: column;
+}
+
+.team-card.red { border-top: 4px solid var(--accent-red); }
+.team-card.blue { border-top: 4px solid var(--accent-blue); }
+
+.team-header {
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  background: #000;
+  color: var(--text-white);
+}
+
+.player-row {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.team-card.red .player-row { color: var(--accent-red); }
+.team-card.blue .player-row { color: var(--accent-blue); }
+
+.settings-bar {
+  background: var(--panel-bg);
+  padding: 15px 25px;
+  border-radius: 4px;
+  border: 1px solid #000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-bar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.lobby-match-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+}
+
+.lobby-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--text-gray);
+  user-select: none;
+}
+
+.lobby-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2f855a;
+  cursor: pointer;
+}
+
+.lobby-check input:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
+/* Goal Animation Overlay */
+.goal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 9999;
+  background: rgba(0,0,0,0.2); /* Subtle dark overlay to pop text */
+  overflow: hidden;
+}
+
+.goal-text {
+  font-family: 'Inter', sans-serif;
+  font-weight: 900;
+  font-size: 11rem;
+  color: #fff;
+  text-shadow: 0 0 50px rgba(255,255,255,1), 20px 20px 0 rgba(0,0,0,0.5);
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.85;
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7) 20%, rgba(0,0,0,0.7) 80%, transparent);
+  width: 100%;
+  padding: 60px 0;
+  box-shadow: 0 0 100px rgba(0,0,0,0.9);
+  animation: goalSlide 5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes goalSlide {
+  0% { transform: translateX(-150%); opacity: 0; }
+  20% { transform: translateX(0); opacity: 1; }
+  80% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(150%); opacity: 0; }
+}
+
+/* Chat */
+.chat-container {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  max-height: 120px;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid #4a5568;
+  padding: 8px;
+  overflow-y: auto;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* Game Interface */
+.game-screen {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  isolation: isolate;
+}
+
+.pause-btn {
+  position: absolute !important;
+  top: 25px !important;
+  right: 25px !important;
+  z-index: 100;
+  width: auto !important;
+  min-width: 130px !important;
+  height: 45px !important;
+  background: rgba(26, 33, 44, 0.9) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px);
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.pause-btn:hover {
+  background: var(--accent-blue) !important;
+  border-color: #fff !important;
+  transform: translateY(-2px);
+}
+
+.game-screen canvas {
+  display: block;
+  max-width: min(100vw - 24px, 100%);
+  max-height: calc(100vh - 100px);
+  width: auto;
+  height: auto;
+  border: none;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+.game-menu-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 200;
+}
+
+.menu-panel {
+  background: var(--panel-bg);
+  border: 1px solid #000;
+  border-radius: 8px;
+  padding: 32px 40px;
+  min-width: 280px;
+  text-align: center;
+}
+
+#scoreboard {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  padding: 12px 50px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  font-weight: 900;
+  font-size: 32px;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+}
