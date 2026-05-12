@@ -24,6 +24,7 @@ export default function App() {
   
   const [rooms, setRooms] = useState({});
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [manualId, setManualId] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [peerId, setPeerId] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -154,10 +155,11 @@ export default function App() {
   };
 
   const handleJoin = async () => {
-    if (!selectedRoom) return;
+    const targetId = selectedRoom || manualId.trim();
+    if (!targetId) return;
     setIsHost(false);
     try {
-      const id = await initNetwork({ playerName, isHost: false, targetPeerId: selectedRoom, onMsg: handleNetworkMessage });
+      const id = await initNetwork({ playerName, isHost: false, targetPeerId: targetId, onMsg: handleNetworkMessage });
       setPeerId(id);
       setScreen('lobby');
     } catch (err) { alert(err.message); }
@@ -248,13 +250,23 @@ export default function App() {
               ))
             )}
           </div>
+
+          <div className="input-group" style={{marginTop: '10px'}}>
+            <label style={{textAlign:'left', fontSize: '10px', opacity: 0.6}}>OR JOIN MANUALLY BY ID</label>
+            <input 
+              value={manualId} 
+              onChange={(e) => setManualId(e.target.value)} 
+              placeholder="Paste Stadium ID here..." 
+              style={{fontSize: '12px', padding: '8px 12px'}}
+            />
+          </div>
           
           <div className="button-group">
             <button className="btn-secondary" onClick={() => setScreen('setup')}>
               <Plus size={18} />
               HOST
             </button>
-            <button className="btn-primary" disabled={!selectedRoom} onClick={handleJoin}>
+            <button className="btn-primary" disabled={!selectedRoom && !manualId.trim()} onClick={handleJoin}>
               <Play size={18} />
               ENTER MATCH
             </button>
@@ -283,6 +295,10 @@ export default function App() {
 
       {screen === 'lobby' && (
         <div className="lobby-view">
+          <div style={{textAlign:'center', marginBottom: '15px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)'}}>
+            <div style={{fontSize: '10px', opacity: 0.5, letterSpacing: '1px'}}>STADIUM ID (SHARE THIS)</div>
+            <div style={{fontSize: '14px', fontWeight: '800', color: 'var(--accent)', cursor: 'pointer'}} onClick={() => { navigator.clipboard.writeText(peerId); alert("ID Copied!"); }}>{peerId}</div>
+          </div>
           <div className="teams-grid">
             {['red', 'bench', 'blue'].map(t => (
               <div key={t} className={`team-card ${t}`} onClick={() => handleMoveToTeam(t)}>
