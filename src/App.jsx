@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initNetwork, sendMessage } from './net.js';
 import { initGame, pauseGame, resumeGame, handleRemoteInput, stopGame, removePlayer } from './game.js';
-import { Users, Plus, Play, Shield, Settings, LogOut, ChevronRight, Trophy, Clock, Activity, Hash, Lock } from 'lucide-react';
+import { Users, Plus, Play, Shield, Settings, LogOut, ChevronRight, Trophy, Clock, Activity, Hash, Lock, X } from 'lucide-react';
 
 export default function App() {
   const [screen, setScreen] = useState('landing');
@@ -76,18 +76,28 @@ export default function App() {
         // I am the HUB!
         localHub = p;
         const globalRooms = {};
+        
+        // Hub's own update loop
+        const hubInterval = setInterval(() => {
+          if (isHost && peerId) {
+            globalRooms[peerId] = { id: peerId, roomName, hostName: playerName, playerCount: Object.keys(playersRef.current).length, lastUpdate: Date.now() };
+          }
+          // Cleanup old rooms
+          const now = Date.now();
+          Object.keys(globalRooms).forEach(id => { if (now - globalRooms[id].lastUpdate > 15000) delete globalRooms[id]; });
+          setRooms({ ...globalRooms });
+        }, 3000);
+
         p.on('connection', c => {
           c.on('data', data => {
             if (data.type === 'register-room') {
               globalRooms[c.peer] = { ...data.room, lastUpdate: Date.now() };
             } else if (data.type === 'get-rooms') {
-              // Cleanup old rooms
-              const now = Date.now();
-              Object.keys(globalRooms).forEach(id => { if (now - globalRooms[id].lastUpdate > 15000) delete globalRooms[id]; });
               c.send({ type: 'rooms-list', rooms: globalRooms });
             }
           });
         });
+        return () => clearInterval(hubInterval);
       });
 
       p.on('error', (err) => {
@@ -169,6 +179,9 @@ export default function App() {
         resumeGame();
         setScreen('game');
       }
+    } else if (msg.type === 'kick-player' && msg.id === peerId) {
+      alert("You have been kicked from the stadium.");
+      window.location.reload();
     }
   };
 
@@ -201,8 +214,20 @@ export default function App() {
       const next = { ...prev };
       if (next[selectedPlayerId]) {
         next[selectedPlayerId].team = team;
-        sendMessage({ type: 'lobby-update', players: next, settings: { timeLimit, scoreLimit, dashEnabled, chargedKickEnabled, staminaEnabled } });
+        sendMessage({ type: 'lobby-update', players: next, settings: { ...matchSettingsRef.current } });
       }
+      return next;
+    });
+    setSelectedPlayerId(null);
+  };
+
+  const handleKickPlayer = (id) => {
+    if (!isHost || id === peerId) return;
+    setPlayers(prev => {
+      const next = { ...prev };
+      delete next[id];
+      sendMessage({ type: 'kick-player', id });
+      sendMessage({ type: 'lobby-update', players: next, settings: { ...matchSettingsRef.current } });
       return next;
     });
     setSelectedPlayerId(null);
@@ -349,7 +374,11 @@ export default function App() {
                         {players[id].name.toUpperCase()}
                         {id === peerId && <span className="player-tag">YOU</span>}
                       </span>
-                      {isHost && id !== peerId && <Settings size={14} opacity={0.4} />}
+                      {isHost && id !== peerId && (
+                        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickPlayer(id); }}>
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

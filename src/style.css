@@ -184,6 +184,13 @@ button:hover:not(:disabled) { background: var(--button-hover); }
   flex-direction: column;
 }
 
+.player-row.selected {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border-color: rgba(59, 130, 246, 0.6) !important;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+  transform: scale(1.02);
+}
+
 .team-card.red { border-top: 4px solid var(--accent-red); }
 .team-card.blue { border-top: 4px solid var(--accent-blue); }
 
