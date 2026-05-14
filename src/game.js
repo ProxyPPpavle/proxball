@@ -20,6 +20,7 @@ let score = { red: 0, blue: 0 };
 let amIHost = false;
 let isGoalHappening = false;
 let lastKickerName = "";
+let lastKickerTeam = "";
 
 const BALL_RADIUS = 12;
 const PLAYER_RADIUS = 25;
@@ -30,8 +31,8 @@ const GOAL_SIZE = 178;
 /** Net depth along X into margin — shallow so goals are not “wide boxes”. */
 const GOAL_DEPTH = 52;
 const POST_RADIUS = 10;
-const PITCH_OFFSET_X = 96;
-const PITCH_OFFSET_Y = 68;
+const PITCH_OFFSET_X = 150;
+const PITCH_OFFSET_Y = 150;
 const CENTER_CIRCLE_R = Math.round(Math.min(PITCH_WIDTH, PITCH_HEIGHT) * 0.145);
 const STRIPE_WIDTH = 88;
 const DASH_COOLDOWN_MS = 850;
@@ -43,12 +44,33 @@ const KICK_FORCE_MAX = 13;
 const KICK_REACH = PLAYER_RADIUS + BALL_RADIUS + 16;
 const INSTANT_KICK_CHARGE = 0.28;
 const gameStaminaEnabled = true;
-const gameChargedKickEnabled = false; // User didn't ask for charged kick, just instant + visual
+const gameChargedKickEnabled = false; 
 const gameDashEnabled = false;
+
+// Collision Categories
+const CAT_PITCH = 0x0001; // Ball, Active Players
+const CAT_WALL = 0x0002;  // Boundaries, Posts
+const CAT_BENCH = 0x0004; // Bench Players
+const CAT_BENCH_BLOCKER = 0x0008; // Goal blockers for bench
 
 let renderFrameId = null;
 let kickChargeMs = 0;
 let localKickCharge01 = 0;
+
+function getSpawnPoint(team, totalWidth, totalHeight) {
+  if (team === 'bench') {
+    return {
+      x: (Math.random() > 0.5) ? 20 : totalWidth - 20,
+      y: PITCH_OFFSET_Y + Math.random() * PITCH_HEIGHT
+    };
+  } else {
+    const spawnIn = Math.round(PITCH_WIDTH * 0.22);
+    return {
+      x: team === 'red' ? PITCH_OFFSET_X + spawnIn : PITCH_OFFSET_X + PITCH_WIDTH - spawnIn,
+      y: totalHeight / 2
+    };
+  }
+}
 
 export function initGame({ canvas, playerName, team, settings, peerId, allPlayers, isHost }) {
   stopGame(); // Ensure clean state
@@ -84,8 +106,13 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
   });
 
   // Borders: inner face flush with white stroke (pitch rectangle), so ball/player edge can sit on the line
-  const wallOptions = { isStatic: true, restitution: 0.6, render: { visible: false } };
-  const borderThickness = 60;
+  const wallOptions = { 
+    isStatic: true, 
+    restitution: 0.6, 
+    render: { visible: false },
+    collisionFilter: { category: CAT_WALL, mask: CAT_PITCH }
+  };
+  const borderThickness = 24; // Thinner walls to give bench players more room
 
   Matter.World.add(engine.world, [
     Matter.Bodies.rectangle(totalWidth/2, PITCH_OFFSET_Y - borderThickness/2, PITCH_WIDTH + borderThickness * 2, borderThickness, wallOptions),
@@ -100,11 +127,26 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     Matter.Bodies.rectangle(PITCH_OFFSET_X - GOAL_DEPTH / 2, PITCH_OFFSET_Y + PITCH_HEIGHT / 2 - GOAL_SIZE / 2, GOAL_DEPTH, 10, wallOptions),
     Matter.Bodies.rectangle(PITCH_OFFSET_X - GOAL_DEPTH / 2, PITCH_OFFSET_Y + PITCH_HEIGHT / 2 + GOAL_SIZE / 2, GOAL_DEPTH, 10, wallOptions),
     Matter.Bodies.rectangle(PITCH_OFFSET_X + PITCH_WIDTH + GOAL_DEPTH / 2, PITCH_OFFSET_Y + PITCH_HEIGHT / 2 - GOAL_SIZE / 2, GOAL_DEPTH, 10, wallOptions),
-    Matter.Bodies.rectangle(PITCH_OFFSET_X + PITCH_WIDTH + GOAL_DEPTH / 2, PITCH_OFFSET_Y + PITCH_HEIGHT / 2 + GOAL_SIZE / 2, GOAL_DEPTH, 10, wallOptions)
+    Matter.Bodies.rectangle(PITCH_OFFSET_X + PITCH_WIDTH + GOAL_DEPTH / 2, PITCH_OFFSET_Y + PITCH_HEIGHT / 2 + GOAL_SIZE / 2, GOAL_DEPTH, 10, wallOptions),
+    
+    // Bench Blockers (invisible walls across goal mouths for bench players ONLY)
+    Matter.Bodies.rectangle(PITCH_OFFSET_X, PITCH_OFFSET_Y + PITCH_HEIGHT / 2, 10, GOAL_SIZE, { 
+      isStatic: true, render: { visible: false }, 
+      collisionFilter: { category: CAT_BENCH_BLOCKER, mask: CAT_BENCH } 
+    }),
+    Matter.Bodies.rectangle(PITCH_OFFSET_X + PITCH_WIDTH, PITCH_OFFSET_Y + PITCH_HEIGHT / 2, 10, GOAL_SIZE, { 
+      isStatic: true, render: { visible: false }, 
+      collisionFilter: { category: CAT_BENCH_BLOCKER, mask: CAT_BENCH } 
+    })
   ]);
 
   // Posts
-  const postOptions = { isStatic: true, restitution: 0.2, render: { fillStyle: '#ffffff', strokeStyle: '#000', lineWidth: 2 } };
+  const postOptions = { 
+    isStatic: true, 
+    restitution: 0.2, 
+    render: { fillStyle: '#ffffff', strokeStyle: '#000', lineWidth: 2 },
+    collisionFilter: { category: CAT_WALL, mask: CAT_PITCH | CAT_BENCH }
+  };
   const posts = [
     Matter.Bodies.circle(PITCH_OFFSET_X, PITCH_OFFSET_Y + PITCH_HEIGHT/2 - GOAL_SIZE/2, POST_RADIUS, postOptions),
     Matter.Bodies.circle(PITCH_OFFSET_X, PITCH_OFFSET_Y + PITCH_HEIGHT/2 + GOAL_SIZE/2, POST_RADIUS, postOptions),
@@ -120,36 +162,65 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
 
   ball = Matter.Bodies.circle(totalWidth/2, totalHeight/2, BALL_RADIUS, {
     restitution: 0.8, frictionAir: 0.012, mass: 1,
-    render: { fillStyle: '#ffffff', strokeStyle: '#000', lineWidth: 2 }
+    render: { fillStyle: '#ffffff', strokeStyle: '#000', lineWidth: 2 },
+    collisionFilter: { category: CAT_PITCH, mask: CAT_PITCH | CAT_WALL }
   });
   Matter.World.add(engine.world, ball);
 
   Object.keys(allPlayers).forEach(id => {
     const info = allPlayers[id];
-    if (info.team === 'bench') return;
-    const spawnIn = Math.round(PITCH_WIDTH * 0.22);
-    const spawnX = info.team === 'red' ? PITCH_OFFSET_X + spawnIn : PITCH_OFFSET_X + PITCH_WIDTH - spawnIn;
-    const pBody = Matter.Bodies.circle(spawnX, totalHeight/2, PLAYER_RADIUS, {
-      frictionAir: 0.05,
+    let teamColor = info.team === 'red' ? '#ff4b4b' : (info.team === 'blue' ? '#3b82f6' : 'rgba(160, 174, 192, 0.34)');
+    let category = info.team === 'bench' ? CAT_BENCH : CAT_PITCH;
+    // Bench players have NO physical collisions (mask: 0)
+    let mask = info.team === 'bench' ? 0 : (CAT_PITCH | CAT_WALL);
+
+    const { x: spawnX, y: spawnY } = getSpawnPoint(info.team, totalWidth, totalHeight);
+
+    const pBody = Matter.Bodies.circle(spawnX, spawnY, PLAYER_RADIUS, {
+      frictionAir: 0.08, 
       mass: 12, restitution: 0,
       render: { 
-        fillStyle: info.team === 'red' ? '#ff4b4b' : '#3b82f6', 
-        strokeStyle: '#ffffff', 
+        fillStyle: teamColor, 
+        strokeStyle: info.team === 'bench' ? 'rgba(255,255,255,0.2)' : '#ffffff', 
         lineWidth: 3, 
-        originalColor: info.team === 'red' ? '#ff4b4b' : '#3b82f6' 
-      }
+        originalColor: teamColor,
+        opacity: info.team === 'bench' ? 0.34 : 1.0
+      },
+      collisionFilter: { category, mask }
     });
     players[id] = { body: pBody, name: info.name, team: info.team, targetPos: null, boost: 100 };
     Matter.World.add(engine.world, pBody);
   });
+
+  // CRITICAL: Ensure local player is created even if they were missing from allPlayers list
+  if (!players[localPlayerId]) {
+    const info = { name: playerName, team };
+    const teamColor = info.team === 'red' ? '#ff4b4b' : (info.team === 'blue' ? '#3b82f6' : 'rgba(160, 174, 192, 0.34)');
+    const category = info.team === 'bench' ? CAT_BENCH : CAT_PITCH;
+    const mask = info.team === 'bench' ? 0 : (CAT_PITCH | CAT_WALL);
+    const { x: sx, y: sy } = getSpawnPoint(info.team, totalWidth, totalHeight);
+    const pBody = Matter.Bodies.circle(sx, sy, PLAYER_RADIUS, {
+      frictionAir: 0.08, mass: 12, restitution: 0,
+      render: { 
+        fillStyle: teamColor, 
+        strokeStyle: info.team === 'bench' ? 'rgba(255,255,255,0.2)' : '#ffffff', 
+        lineWidth: 3, 
+        originalColor: teamColor,
+        opacity: info.team === 'bench' ? 0.34 : 1.0
+      },
+      collisionFilter: { category, mask }
+    });
+    players[localPlayerId] = { body: pBody, name: info.name, team: info.team, targetPos: null, boost: 100 };
+    Matter.World.add(engine.world, pBody);
+  }
 
   function paintScene() {
     const ctx = render.context;
     ctx.save();
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    ctx.clearRect(0, 0, totalWidth, totalHeight);
+    ctx.fillStyle = '#4a6d3c'; 
+    ctx.fillRect(0, 0, totalWidth, totalHeight);
 
     ctx.save();
     ctx.beginPath();
@@ -158,9 +229,8 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     ctx.fillStyle = '#567d46';
     ctx.fillRect(PITCH_OFFSET_X, PITCH_OFFSET_Y, PITCH_WIDTH, PITCH_HEIGHT);
     ctx.fillStyle = '#456438';
-    const stripeWidth = STRIPE_WIDTH;
-    for (let i = PITCH_OFFSET_X; i < PITCH_OFFSET_X + PITCH_WIDTH; i += stripeWidth * 2) {
-      ctx.fillRect(i, PITCH_OFFSET_Y, stripeWidth, PITCH_HEIGHT);
+    for (let i = PITCH_OFFSET_X; i < PITCH_OFFSET_X + PITCH_WIDTH; i += STRIPE_WIDTH * 2) {
+      ctx.fillRect(i, PITCH_OFFSET_Y, STRIPE_WIDTH, PITCH_HEIGHT);
     }
     ctx.restore();
 
@@ -185,10 +255,12 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
 
     // Names and BOOST BARS
     ctx.font = 'bold 13px Inter'; ctx.textAlign = 'center';
-    Object.keys(players).forEach(id => {
-      const p = players[id];
+    Object.values(players).forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.team === 'bench' ? 0.34 : 1.0;
+      
       const { x, y } = p.body.position;
-      ctx.fillStyle = p.team === 'red' ? '#ff4b4b' : '#3b82f6';
+      ctx.fillStyle = p.team === 'red' ? '#ff4b4b' : (p.team === 'blue' ? '#3b82f6' : '#a0aec0');
       const nameY = Math.max(20, y - PLAYER_RADIUS - 15);
       ctx.fillText(p.name.toUpperCase(), x, nameY);
 
@@ -212,6 +284,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
       ctx.strokeStyle = 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, barW, barH);
+      ctx.restore();
     });
 
     const lpLocal = players[localPlayerId];
@@ -288,7 +361,8 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     const force = KICK_FORCE_MIN + charge01 * (KICK_FORCE_MAX - KICK_FORCE_MIN);
     Matter.Body.setVelocity(ball, Matter.Vector.mult(dir, force));
     lastKickerName = lp.name;
-    sendMessage({ type: 'kick', id: localPlayerId, dir, force, kickerName: lp.name });
+    lastKickerTeam = lp.team;
+    sendMessage({ type: 'kick', id: localPlayerId, dir, force, kickerName: lp.name, kickerTeam: lp.team });
     
     kickChargeMs = 0;
     localKickCharge01 = 0;
@@ -315,7 +389,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     }
 
     if (lp) {
-      let f = 0.0035;
+      let f = 0.005; 
       
       // BOOST Logic
       if (gameStaminaEnabled && keys['KeyE'] && lp.boost > 0) {
@@ -381,11 +455,76 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
         Matter.Body.setPosition(p.body, { x: newX, y: newY });
       }
     });
-
     if (amIHost) {
       if (Matter.Collision.collides(ball, goalRedSensor)) { handleGoal('blue'); }
       else if (Matter.Collision.collides(ball, goalBlueSensor)) { handleGoal('red'); }
       sendMessage({ type: 'ball-sync', pos: ball.position, vel: ball.velocity });
+    }
+
+    // Manual bounds for bench players removed - they can go everywhere!
+  });
+}
+
+/** 
+ * Dynamically add a player who joined mid-game.
+ */
+export function addPlayer(id, info) {
+  if (!engine || players[id]) return;
+  const totalWidth = PITCH_WIDTH + PITCH_OFFSET_X * 2;
+  const totalHeight = PITCH_HEIGHT + PITCH_OFFSET_Y * 2;
+  let teamColor = info.team === 'red' ? '#ff4b4b' : (info.team === 'blue' ? '#3b82f6' : '#a0aec0');
+  let category = info.team === 'bench' ? CAT_BENCH : CAT_PITCH;
+  let mask = info.team === 'bench' ? (CAT_BENCH | CAT_WALL | CAT_BENCH_BLOCKER) : (CAT_PITCH | CAT_WALL);
+
+  const { x: spawnX, y: spawnY } = getSpawnPoint(info.team, totalWidth, totalHeight);
+
+  const pBody = Matter.Bodies.circle(spawnX, spawnY, PLAYER_RADIUS, {
+    frictionAir: 0.08, 
+    mass: 12, restitution: 0,
+    render: { 
+      fillStyle: teamColor, 
+      strokeStyle: info.team === 'bench' ? 'rgba(255,255,255,0.2)' : '#ffffff', 
+      lineWidth: 3, 
+      originalColor: teamColor 
+    },
+    collisionFilter: { category, mask }
+  });
+  players[id] = { body: pBody, name: info.name, team: info.team, targetPos: null, boost: 100 };
+  Matter.World.add(engine.world, pBody);
+}
+
+/**
+ * Sync player teams and positions mid-game (e.g. after host changes teams in pause)
+ */
+export function syncPlayers(allPlayers) {
+  if (!engine) return;
+  Object.keys(allPlayers).forEach(id => {
+    const info = allPlayers[id];
+    if (players[id]) {
+      const p = players[id];
+      if (p.team !== info.team) {
+        p.team = info.team;
+        let teamColor = info.team === 'red' ? '#ff4b4b' : (info.team === 'blue' ? '#3b82f6' : 'rgba(160, 174, 192, 0.34)');
+        let category = info.team === 'bench' ? CAT_BENCH : CAT_PITCH;
+        let mask = info.team === 'bench' ? 0 : (CAT_PITCH | CAT_WALL);
+
+        p.body.render.fillStyle = teamColor;
+        p.body.render.originalColor = teamColor;
+        p.body.collisionFilter = { category, mask };
+        p.body.render.strokeStyle = info.team === 'bench' ? 'rgba(255,255,255,0.2)' : '#ffffff';
+        p.body.render.opacity = info.team === 'bench' ? 0.34 : 1.0;
+
+        // If moved from bench to a team, or just changed team, respawn them
+        if (info.team !== 'bench') {
+          const totalWidth = PITCH_WIDTH + PITCH_OFFSET_X * 2;
+          const totalHeight = PITCH_HEIGHT + PITCH_OFFSET_Y * 2;
+          const { x: sx, y: sy } = getSpawnPoint(info.team, totalWidth, totalHeight);
+          Matter.Body.setPosition(p.body, { x: sx, y: sy });
+          Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
+        }
+      }
+    } else {
+      addPlayer(id, info);
     }
   });
 }
@@ -394,9 +533,12 @@ function handleGoal(team) {
   if (isGoalHappening) return;
   isGoalHappening = true;
   score[team]++;
-  sendMessage({ type: 'score', score, celebration: true, scorer: lastKickerName || "SOMEONE", team: team });
+
+  const isOwnGoal = lastKickerTeam && lastKickerTeam !== team; 
+  
+  sendMessage({ type: 'score', score, celebration: true, scorer: lastKickerName || "SOMEONE", team: team, isOwnGoal });
   updateScoreboardUI(score);
-  notifyGoalUi({ celebration: true, scorer: lastKickerName || 'SOMEONE', team });
+  notifyGoalUi({ celebration: true, scorer: lastKickerName || 'SOMEONE', team, isOwnGoal });
   setTimeout(() => {
     isGoalHappening = false;
     resetMatch();
@@ -417,9 +559,8 @@ function resetMatch() {
   Matter.Body.setVelocity(ball, { x: 0, y: 0 });
   Object.keys(players).forEach(id => {
     const p = players[id];
-    const spawnIn = Math.round(PITCH_WIDTH * 0.22);
-    const sx = p.team === 'red' ? PITCH_OFFSET_X + spawnIn : PITCH_OFFSET_X + PITCH_WIDTH - spawnIn;
-    Matter.Body.setPosition(p.body, { x: sx, y: totalHeight/2 });
+    const { x: sx, y: sy } = getSpawnPoint(p.team, totalWidth, totalHeight);
+    Matter.Body.setPosition(p.body, { x: sx, y: sy });
     Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
   });
   if (amIHost) {
@@ -446,7 +587,11 @@ export function stopGame() {
     Matter.Render.stop(render); 
     render = null;
   }
-  if (engine) { Matter.Engine.clear(engine); engine = null; }
+  if (engine) { 
+    Matter.Events.off(engine);
+    Matter.Engine.clear(engine); 
+    engine = null; 
+  }
   players = {};
   keys = {};
   kickChargeMs = 0;
@@ -476,6 +621,7 @@ export function handleRemoteInput(msg) {
       players[msg.id].body.render.fillStyle = '#fff';
       setTimeout(() => { if(players[msg.id]) players[msg.id].body.render.fillStyle = players[msg.id].body.render.originalColor; }, 100);
       if (msg.kickerName) lastKickerName = msg.kickerName;
+      if (msg.kickerTeam) lastKickerTeam = msg.kickerTeam;
       if (amIHost && msg.dir && msg.force) {
         Matter.Body.setVelocity(ball, Matter.Vector.mult(msg.dir, msg.force));
       }
@@ -484,5 +630,6 @@ export function handleRemoteInput(msg) {
     score = msg.score;
     isGoalHappening = msg.celebration;
     updateScoreboardUI(score);
+    if (!msg.celebration) resetMatch(); // Reset positions on guest side when celebration ends
   }
 }

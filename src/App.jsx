@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Peer from 'peerjs';
 import { initNetwork, sendMessage } from './net.js';
-import { initGame, pauseGame, resumeGame, handleRemoteInput, stopGame, removePlayer } from './game.js';
+import { initGame, pauseGame, resumeGame, handleRemoteInput, stopGame, removePlayer, syncPlayers } from './game.js';
 import { Users, Plus, Play, Shield, Settings, LogOut, ChevronRight, Trophy, Clock, Activity, Hash, Lock, X } from 'lucide-react';
 
 export default function App() {
@@ -27,18 +28,25 @@ export default function App() {
   const [manualId, setManualId] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [peerId, setPeerId] = useState(null);
+  const [targetId, setTargetId] = useState(null); // To show the stadium code to guests
   const [isPaused, setIsPaused] = useState(false);
   
   const [players, setPlayers] = useState({});
   const playersRef = useRef({});
-  
+  const peerIdRef = useRef(peerId);
+  const screenRef = useRef(screen);
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
+
+  useEffect(() => { peerIdRef.current = peerId; }, [peerId]);
+  useEffect(() => { screenRef.current = screen; }, [screen]);
+  useEffect(() => { playersRef.current = players; }, [players]);
+
   const [isGoalHappening, setIsGoalHappening] = useState(false);
+  const [isKicked, setIsKicked] = useState(false);
   const [scorerName, setScorerName] = useState("");
   const [scorerTeam, setScorerTeam] = useState("");
   const canvasRef = useRef(null);
-
-  useEffect(() => { playersRef.current = players; }, [players]);
+  const resumeTimeoutRef = useRef(null);
 
   useEffect(() => { sessionStorage.setItem('proxball_name', playerName); }, [playerName]);
 
@@ -58,6 +66,7 @@ export default function App() {
       if (typeof d.celebration === 'boolean') setIsGoalHappening(d.celebration);
       if (d.scorer != null) setScorerName(String(d.scorer));
       if (d.team != null) setScorerTeam(String(d.team));
+      if (d.isOwnGoal != null) setIsOwnGoal(!!d.isOwnGoal);
     };
     window.addEventListener('proxball-goal-ui', onGoalUi);
     return () => window.removeEventListener('proxball-goal-ui', onGoalUi);
@@ -132,6 +141,11 @@ export default function App() {
       setPlayers(prev => {
         const next = { ...prev, [senderPeerId]: { name: msg.playerName || 'Guest', team: 'bench' } };
         sendMessage({ type: 'lobby-update', players: next, settings: { ...matchSettingsRef.current } });
+        if (screenRef.current === 'game') {
+          import('./game.js').then(m => m.addPlayer(senderPeerId, { name: msg.playerName || 'Guest', team: 'bench' }));
+          // If match is already running, tell the new guest to start their engine
+          if (!isPaused) sendMessage({ type: 'pause', val: false }, senderPeerId);
+        }
         return next;
       });
     } else if (msg.type === 'player-left') {
@@ -141,9 +155,10 @@ export default function App() {
         if (isHost) sendMessage({ type: 'lobby-update', players: next, settings: { ...matchSettingsRef.current } });
         return next;
       });
-      if (screen === 'game') removePlayer(msg.id);
+      if (screenRef.current === 'game') removePlayer(msg.id);
     } else if (msg.type === 'lobby-update') {
       setPlayers(msg.players);
+      if (screenRef.current === 'game') syncPlayers(msg.players);
       if (msg.settings) {
         if (msg.settings.timeLimit != null) setTimeLimit(msg.settings.timeLimit);
         if (msg.settings.scoreLimit != null) setScoreLimit(msg.settings.scoreLimit);
@@ -163,6 +178,16 @@ export default function App() {
       setScreen('lobby');
       setIsPaused(false);
       setIsGoalHappening(false);
+    } else if (msg.type === 'kick-player') {
+      if (msg.id === peerIdRef.current) {
+        setIsKicked(true);
+        stopGame();
+        setTimeout(() => {
+          setScreen('landing');
+          setIsKicked(false);
+          window.location.reload();
+        }, 3000);
+      }
     } else if (msg.type === 'pos' || msg.type === 'kick' || msg.type === 'ball-sync') {
       handleRemoteInput(msg);
     } else if (msg.type === 'score') {
@@ -170,26 +195,41 @@ export default function App() {
       setIsGoalHappening(msg.celebration);
       if (msg.scorer) setScorerName(msg.scorer);
       if (msg.team) setScorerTeam(msg.team);
+      if (msg.isOwnGoal !== undefined) setIsOwnGoal(msg.isOwnGoal);
     } else if (msg.type === 'pause') {
       setIsPaused(msg.val);
       if (msg.val) {
         pauseGame();
         setScreen('lobby');
       } else {
-        resumeGame();
-        setScreen('game');
+        if (screenRef.current !== 'game') {
+          // Late joiner or resuming while in lobby
+          setScreen('game');
+          if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+          resumeTimeoutRef.current = setTimeout(() => {
+            if (!canvasRef.current) return;
+            const pid = peerIdRef.current;
+            initGame({ 
+              canvas: canvasRef.current,
+              playerName, team: playersRef.current[pid]?.team || 'bench', 
+              settings: matchSettingsRef.current, peerId: pid, allPlayers: playersRef.current, isHost: false 
+            });
+            resumeTimeoutRef.current = null;
+          }, 300);
+        } else {
+          resumeGame();
+          setScreen('game');
+        }
       }
-    } else if (msg.type === 'kick-player' && msg.id === peerId) {
-      alert("You have been kicked from the stadium.");
-      window.location.reload();
     }
   };
 
   const handleCreateFinal = async () => {
-    setIsHost(true);
     try {
       const id = await initNetwork({ playerName, isHost: true, password, onMsg: handleNetworkMessage });
       setPeerId(id);
+      peerIdRef.current = id;
+      setIsHost(true);
       setPlayers({ [id]: { name: playerName, team: 'red' } });
       setScreen('lobby');
     } catch (err) { alert(err.message); }
@@ -203,7 +243,9 @@ export default function App() {
     setIsHost(false);
     try {
       const id = await initNetwork({ playerName, isHost: false, targetPeerId: targetId, onMsg: handleNetworkMessage });
+      setTargetId(targetId);
       setPeerId(id);
+      peerIdRef.current = id; // IMMEDIATE SYNC to prevent movement lockout
       setScreen('lobby');
     } catch (err) { alert("Stadium not found! Check the code."); }
   };
@@ -214,6 +256,7 @@ export default function App() {
       const next = { ...prev };
       if (next[selectedPlayerId]) {
         next[selectedPlayerId].team = team;
+        if (screenRef.current === 'game') syncPlayers(next);
         sendMessage({ type: 'lobby-update', players: next, settings: { ...matchSettingsRef.current } });
       }
       return next;
@@ -222,15 +265,27 @@ export default function App() {
   };
 
   const handleKickPlayer = (id) => {
-    if (!isHost || id === peerId) return;
+    if (!isHost || id === peerIdRef.current) return;
+    sendMessage({ type: 'kick-player', id });
     setPlayers(prev => {
       const next = { ...prev };
       delete next[id];
-      sendMessage({ type: 'kick-player', id });
       sendMessage({ type: 'lobby-update', players: next, settings: { ...matchSettingsRef.current } });
       return next;
     });
+    // Always try to remove from physics engine if it's running
+    removePlayer(id);
     setSelectedPlayerId(null);
+  };
+  
+  const handleExitGame = () => {
+    if (window.confirm("Are you sure you want to exit?")) {
+      stopGame();
+      setScreen('landing');
+      // PeerJS connection will close on page refresh/navigate anyway, 
+      // but we could explicitly disconnect here if we had the peer object.
+      window.location.reload(); 
+    }
   };
 
   const handleStartMatch = () => {
@@ -247,6 +302,11 @@ export default function App() {
 
   const togglePause = () => {
     const next = !isPaused;
+    if (!next && isHost) {
+      // Re-sync everyone's state right before resuming
+      sendMessage({ type: 'lobby-update', players: playersRef.current, settings: matchSettingsRef.current });
+      syncPlayers(playersRef.current);
+    }
     setIsPaused(next);
     sendMessage({ type: 'pause', val: next });
     if (next) {
@@ -265,8 +325,10 @@ export default function App() {
     setIsPaused(false);
   };
 
+  const [isOwnGoal, setIsOwnGoal] = useState(false);
+
   return (
-    <div className="app-container">
+    <div className={`app-container ${screen === 'game' ? 'game-mode' : ''}`}>
       {screen === 'landing' && (
         <div className="panel">
           <h1>PROXBALL</h1>
@@ -352,8 +414,13 @@ export default function App() {
         <div className="lobby-view">
           <div style={{textAlign:'center', marginBottom: '15px', background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.2)'}}>
             <div style={{fontSize: '10px', opacity: 0.5, letterSpacing: '2px', marginBottom: '5px'}}>STADIUM CODE (SHARE THIS)</div>
-            <div style={{fontSize: '32px', fontWeight: '900', color: 'var(--accent)', cursor: 'pointer', letterSpacing: '8px'}} onClick={() => { navigator.clipboard.writeText(peerId.replace('PB-','')); alert("Code Copied!"); }}>
-              {peerId ? peerId.replace('PB-','') : '---'}
+            <div style={{fontSize: '32px', fontWeight: '900', color: 'var(--accent)', cursor: 'pointer', letterSpacing: '8px'}} 
+                 onClick={() => { 
+                   const code = isHost ? peerId.replace('PB-','') : (targetId ? targetId.replace('PB-','') : '---');
+                   navigator.clipboard.writeText(code); 
+                   alert("Code Copied!"); 
+                 }}>
+              {isHost ? (peerId ? peerId.replace('PB-','') : '---') : (targetId ? targetId.replace('PB-','') : '---')}
             </div>
           </div>
           <div className="teams-grid">
@@ -370,13 +437,15 @@ export default function App() {
                     <div key={id} 
                          className={`player-row ${selectedPlayerId === id ? 'selected' : ''}`} 
                          onClick={(e) => { e.stopPropagation(); if(isHost) setSelectedPlayerId(id); }}>
-                      <span style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                        {players[id].name.toUpperCase()}
+                      <span style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0}}>
+                        <span style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                          {players[id].name.toUpperCase()}
+                        </span>
                         {id === peerId && <span className="player-tag">YOU</span>}
                       </span>
                       {isHost && id !== peerId && (
-                        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleKickPlayer(id); }}>
-                          <X size={14} />
+                        <button className="btn-kick-small" onClick={(e) => { e.stopPropagation(); handleKickPlayer(id); }} title="Kick Player">
+                          <X size={12} />
                         </button>
                       )}
                     </div>
@@ -467,17 +536,29 @@ export default function App() {
             <span id="score-blue" style={{color:'var(--accent-blue)'}}>0</span>
           </div>
           
-          {isHost && (
-            <button className="btn-menu-top pause-btn" onClick={togglePause}>
+          {isHost ? (
+            <button className="btn-top-right pause-btn" onClick={togglePause}>
               <Settings size={16} /> MENU
             </button>
+          ) : (
+            <button className="btn-top-right exit-btn-top" onClick={handleExitGame}>
+              <LogOut size={16} /> EXIT
+            </button>
+          )}
+
+          {isKicked && (
+            <div className="goal-overlay" style={{zIndex: 10000}}>
+              <div className="goal-text">
+                <div style={{color: '#ff4b4b', fontSize: '10rem'}}>KICKED</div>
+              </div>
+            </div>
           )}
 
           {isGoalHappening && (
             <div className="goal-overlay" key="goal-celebration">
               <div className="goal-text">
-                <div style={{fontSize: '4.5rem', opacity: 0.9, marginBottom: '-10px', color: scorerTeam === 'red' ? '#ff4b4b' : '#3b82f6', textShadow: '0 0 20px rgba(0,0,0,0.5)'}}>{scorerName.toUpperCase()}</div>
-                <div style={{color: '#fff', fontSize: '10rem'}}>SCORED!</div>
+                <div style={{fontSize: '4.5rem', opacity: 0.9, marginBottom: '-10px', color: scorerTeam === 'red' ? '#ff4b4b' : '#3b82f6'}}>{scorerName.toUpperCase()}</div>
+                <div style={{color: '#fff', fontSize: '10rem'}}>{isOwnGoal ? 'IS DUMB!' : 'SCORED!'}</div>
               </div>
             </div>
           )}

@@ -1,8 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 
 :root {
-  --bg-green: #567d46;
-  --bg-stripe: #4d703e;
+  --bg-green: #4a6d3c;
+  --bg-stripe: #426335;
   --panel-bg: #1a212c;
   --accent-red: #ff4b4b;
   --accent-blue: #3b82f6;
@@ -23,13 +23,6 @@ body {
   padding: 0;
   font-family: 'Inter', sans-serif;
   background: var(--bg-green);
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--bg-green),
-    var(--bg-green) 100px,
-    var(--bg-stripe) 100px,
-    var(--bg-stripe) 200px
-  );
   color: var(--text-white);
   height: 100vh;
   overflow: hidden;
@@ -42,6 +35,17 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--bg-green),
+    var(--bg-green) 100px,
+    var(--bg-stripe) 100px,
+    var(--bg-stripe) 200px
+  );
+}
+
+.app-container.game-mode {
+  background-image: none;
 }
 
 /* HaxBall Styled Panels */
@@ -277,7 +281,7 @@ button:hover:not(:disabled) { background: var(--button-hover); }
   justify-content: center;
   pointer-events: none;
   z-index: 9999;
-  background: rgba(0,0,0,0.2); /* Subtle dark overlay to pop text */
+  background: transparent;
   overflow: hidden;
 }
 
@@ -286,16 +290,14 @@ button:hover:not(:disabled) { background: var(--button-hover); }
   font-weight: 900;
   font-size: 11rem;
   color: #fff;
-  text-shadow: 0 0 50px rgba(255,255,255,1), 20px 20px 0 rgba(0,0,0,0.5);
+  text-shadow: 6px 6px 0 rgba(0,0,0,0.4); /* Solid shadow for readability */
   white-space: nowrap;
   display: flex;
   flex-direction: column;
   align-items: center;
   line-height: 0.85;
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7) 20%, rgba(0,0,0,0.7) 80%, transparent);
   width: 100%;
   padding: 60px 0;
-  box-shadow: 0 0 100px rgba(0,0,0,0.9);
   animation: goalSlide 5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
@@ -407,4 +409,58 @@ button:hover:not(:disabled) { background: var(--button-hover); }
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   backdrop-filter: blur(4px);
+}
+
+.btn-top-right {
+  position: absolute !important;
+  top: 25px !important;
+  right: 25px !important;
+  z-index: 100;
+  width: auto !important;
+  min-width: 130px !important;
+  height: 45px !important;
+  background: rgba(26, 33, 44, 0.9) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px);
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.2s;
+}
+
+.btn-top-right:hover {
+  background: var(--accent-blue) !important;
+  border-color: #fff !important;
+  transform: translateY(-2px);
+}
+
+.btn-kick-small {
+  background: rgba(255, 75, 75, 0.1);
+  border: 1px solid rgba(255, 75, 75, 0.2);
+  color: #ff4b4b;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-kick-small:hover {
+  background: #ff4b4b;
+  color: #fff;
+}
+
+.exit-btn-top {
+  /* No special colors, uses .btn-top-right defaults */
 }
