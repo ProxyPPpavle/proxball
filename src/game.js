@@ -21,6 +21,9 @@ let amIHost = false;
 let isGoalHappening = false;
 let lastKickerName = "";
 let lastKickerTeam = "";
+let matchSettings = { scoreLimit: 5, timeLimit: 3 };
+let matchTimeMs = 0;
+let isGameOver = false;
 
 const BALL_RADIUS = 12;
 const PLAYER_RADIUS = 25;
@@ -89,6 +92,13 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
   amIHost = isHost;
   players = {};
   isGoalHappening = false;
+  isGameOver = false;
+  matchTimeMs = 0;
+  score = { red: 0, blue: 0 };
+  matchSettings = { 
+    scoreLimit: settings?.scoreLimit || 5, 
+    timeLimit: settings?.timeLimit || 3 
+  };
   kickChargeMs = 0;
   localKickCharge01 = 0;
 
@@ -369,6 +379,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
   }
 
   Matter.Events.on(engine, 'beforeUpdate', (event) => {
+    if (isGameOver) return;
     const lp = players[localPlayerId];
     const delta = event.delta || 16.666;
     const deltaScale = delta / 16.666;
@@ -461,6 +472,14 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     if (amIHost) {
       if (Matter.Collision.collides(ball, goalRedSensor)) { handleGoal('blue'); }
       else if (Matter.Collision.collides(ball, goalBlueSensor)) { handleGoal('red'); }
+      
+      if (!isGoalHappening) {
+        matchTimeMs += delta;
+        if (matchSettings.timeLimit > 0 && matchTimeMs >= matchSettings.timeLimit * 60 * 1000) {
+          checkWinner(true);
+        }
+      }
+
       sendMessage({ type: 'ball-sync', pos: ball.position, vel: ball.velocity });
     }
 
@@ -533,7 +552,7 @@ export function syncPlayers(allPlayers) {
 }
 
 function handleGoal(team) {
-  if (isGoalHappening) return;
+  if (isGoalHappening || isGameOver) return;
   isGoalHappening = true;
   score[team]++;
 
@@ -541,11 +560,38 @@ function handleGoal(team) {
   
   sendMessage({ type: 'score', score, celebration: true, scorer: lastKickerName || "SOMEONE", team: team, isOwnGoal });
   updateScoreboardUI(score);
+  
+  // Check if someone reached the score limit
+  if (amIHost && matchSettings.scoreLimit > 0 && score[team] >= matchSettings.scoreLimit) {
+    checkWinner(false);
+    return;
+  }
+
   notifyGoalUi({ celebration: true, scorer: lastKickerName || 'SOMEONE', team, isOwnGoal });
   setTimeout(() => {
     isGoalHappening = false;
     resetMatch();
   }, 5000); // 5 SECOND DELAY FOR SMOOTH CELEBRATION
+}
+
+function checkWinner(timeOut = false) {
+  if (isGameOver) return;
+  isGameOver = true;
+  
+  let winner = 'draw';
+  if (score.red > score.blue) winner = 'red';
+  else if (score.blue > score.red) winner = 'blue';
+
+  const winnerName = winner === 'red' ? 'RED TEAM' : (winner === 'blue' ? 'BLUE TEAM' : 'MATCH DRAW');
+  
+  sendMessage({ type: 'game-over', winner: winnerName, team: winner });
+  notifyGoalUi({ celebration: true, scorer: winnerName, team: winner, isGameOver: true });
+  
+  setTimeout(() => {
+    if (amIHost) {
+      sendMessage({ type: 'end-game' });
+    }
+  }, 5500);
 }
 
 function updateScoreboardUI(s) {
@@ -634,5 +680,9 @@ export function handleRemoteInput(msg) {
     isGoalHappening = msg.celebration;
     updateScoreboardUI(score);
     if (!msg.celebration) resetMatch(); // Reset positions on guest side when celebration ends
+  } else if (msg.type === 'game-over') {
+    isGameOver = true;
+    isGoalHappening = true;
+    notifyGoalUi({ celebration: true, scorer: msg.winner, team: msg.team, isGameOver: true });
   }
 }

@@ -42,6 +42,7 @@ export default function App() {
   useEffect(() => { playersRef.current = players; }, [players]);
 
   const [isGoalHappening, setIsGoalHappening] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
   const [isKicked, setIsKicked] = useState(false);
   const [scorerName, setScorerName] = useState("");
   const [scorerTeam, setScorerTeam] = useState("");
@@ -67,6 +68,7 @@ export default function App() {
       if (d.scorer != null) setScorerName(String(d.scorer));
       if (d.team != null) setScorerTeam(String(d.team));
       if (d.isOwnGoal != null) setIsOwnGoal(!!d.isOwnGoal);
+      if (d.isGameOver != null) setIsGameOver(!!d.isGameOver);
     };
     window.addEventListener('proxball-goal-ui', onGoalUi);
     return () => window.removeEventListener('proxball-goal-ui', onGoalUi);
@@ -178,6 +180,12 @@ export default function App() {
       setScreen('lobby');
       setIsPaused(false);
       setIsGoalHappening(false);
+      setIsGameOver(false);
+    } else if (msg.type === 'game-over') {
+      setIsGoalHappening(true);
+      setIsGameOver(true);
+      if (msg.winner) setScorerName(msg.winner);
+      if (msg.team) setScorerTeam(msg.team);
     } else if (msg.type === 'kick-player') {
       if (msg.id === peerIdRef.current) {
         setIsKicked(true);
@@ -557,8 +565,10 @@ export default function App() {
           {isGoalHappening && (
             <div className="goal-overlay" key="goal-celebration">
               <div className="goal-text">
-                <div style={{fontSize: '4.5rem', opacity: 0.9, marginBottom: '-10px', color: scorerTeam === 'red' ? '#ff4b4b' : '#3b82f6'}}>{scorerName.toUpperCase()}</div>
-                <div style={{color: '#fff', fontSize: '10rem'}}>{isOwnGoal ? 'IS DUMB!' : 'SCORED!'}</div>
+                <div style={{fontSize: '4.5rem', opacity: 0.9, marginBottom: '-10px', color: scorerTeam === 'red' ? '#ff4b4b' : (scorerTeam === 'blue' ? '#3b82f6' : '#fff')}}>{scorerName.toUpperCase()}</div>
+                <div style={{color: '#fff', fontSize: '10rem'}}>
+                  {isGameOver ? 'WINS THE MATCH!' : (isOwnGoal ? 'IS DUMB!' : 'SCORED!')}
+                </div>
               </div>
             </div>
           )}
