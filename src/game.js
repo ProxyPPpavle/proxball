@@ -368,8 +368,10 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     localKickCharge01 = 0;
   }
 
-  Matter.Events.on(engine, 'beforeUpdate', () => {
+  Matter.Events.on(engine, 'beforeUpdate', (event) => {
     const lp = players[localPlayerId];
+    const delta = event.delta || 16.666;
+    const deltaScale = delta / 16.666;
 
     if (isGoalHappening) {
       kickChargeMs = 0;
@@ -377,8 +379,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     } else if (gameChargedKickEnabled && lp && keys['Space']) {
       const dist = Matter.Vector.magnitude(Matter.Vector.sub(ball.position, lp.body.position));
       if (dist < KICK_REACH) {
-        const dt = engine.timing.lastDelta ?? 16.67;
-        kickChargeMs += dt;
+        kickChargeMs += delta;
         if (kickChargeMs > KICK_CHARGE_MS_FULL) kickChargeMs = KICK_CHARGE_MS_FULL;
         localKickCharge01 = Math.min(1, kickChargeMs / KICK_CHARGE_MS_FULL);
       } else {
@@ -389,14 +390,14 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     }
 
     if (lp) {
-      let f = 0.005; 
+      let f = 0.005 * deltaScale; 
       
       // BOOST Logic
       if (gameStaminaEnabled && keys['KeyE'] && lp.boost > 0) {
-        f *= 1.2; 
-        lp.boost = Math.max(0, lp.boost - 1.2); 
+        f *= 1.11; // 11% speed boost as requested
+        lp.boost = Math.max(0, lp.boost - 1.2 * deltaScale); 
       } else {
-        lp.boost = Math.min(100, lp.boost + 0.3); 
+        lp.boost = Math.min(100, lp.boost + 0.3 * deltaScale); 
       }
 
       let moveX = 0, moveY = 0;
@@ -449,7 +450,9 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     Object.keys(players).forEach(id => {
       if (id !== localPlayerId && players[id].targetPos) {
         const p = players[id];
-        const lerpFactor = 0.35;
+        // Frame-rate independent lerp
+        const baseLerp = 0.35;
+        const lerpFactor = 1 - Math.pow(1 - baseLerp, deltaScale);
         const newX = p.body.position.x + (p.targetPos.x - p.body.position.x) * lerpFactor;
         const newY = p.body.position.y + (p.targetPos.y - p.body.position.y) * lerpFactor;
         Matter.Body.setPosition(p.body, { x: newX, y: newY });
