@@ -99,6 +99,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     scoreLimit: settings?.scoreLimit || 5, 
     timeLimit: settings?.timeLimit || 3 
   };
+  updateScoreboardUI(score);
   kickChargeMs = 0;
   localKickCharge01 = 0;
 
