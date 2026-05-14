@@ -69,6 +69,14 @@ export default function App() {
       if (d.team != null) setScorerTeam(String(d.team));
       if (d.isOwnGoal != null) setIsOwnGoal(!!d.isOwnGoal);
       if (d.isGameOver != null) setIsGameOver(!!d.isGameOver);
+      
+      if (d.type === 'end-game-ui') {
+        stopGame();
+        setScreen('lobby');
+        setIsPaused(false);
+        setIsGoalHappening(false);
+        setIsGameOver(false);
+      }
     };
     window.addEventListener('proxball-goal-ui', onGoalUi);
     return () => window.removeEventListener('proxball-goal-ui', onGoalUi);

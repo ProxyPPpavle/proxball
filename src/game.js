@@ -590,6 +590,7 @@ function checkWinner(timeOut = false) {
   setTimeout(() => {
     if (amIHost) {
       sendMessage({ type: 'end-game' });
+      notifyGoalUi({ type: 'end-game-ui' });
     }
   }, 5500);
 }
