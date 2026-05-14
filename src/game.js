@@ -100,6 +100,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
     timeLimit: settings?.timeLimit || 3 
   };
   updateScoreboardUI(score);
+  updateTimerUI(0);
   kickChargeMs = 0;
   localKickCharge01 = 0;
 
@@ -470,18 +471,22 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
         Matter.Body.setPosition(p.body, { x: newX, y: newY });
       }
     });
+    if (!isGoalHappening && !isGameOver) {
+      matchTimeMs += delta;
+    }
+    updateTimerUI(matchTimeMs);
+
     if (amIHost) {
       if (Matter.Collision.collides(ball, goalRedSensor)) { handleGoal('blue'); }
       else if (Matter.Collision.collides(ball, goalBlueSensor)) { handleGoal('red'); }
       
-      if (!isGoalHappening) {
-        matchTimeMs += delta;
+      if (!isGoalHappening && !isGameOver) {
         if (matchSettings.timeLimit > 0 && matchTimeMs >= matchSettings.timeLimit * 60 * 1000) {
           checkWinner(true);
         }
       }
 
-      sendMessage({ type: 'ball-sync', pos: ball.position, vel: ball.velocity });
+      sendMessage({ type: 'ball-sync', pos: ball.position, vel: ball.velocity, time: matchTimeMs });
     }
 
     // Manual bounds for bench players removed - they can go everywhere!
@@ -603,6 +608,16 @@ function updateScoreboardUI(s) {
   if (b) b.innerText = s.blue;
 }
 
+function updateTimerUI(ms) {
+  const t = document.getElementById('match-timer');
+  if (t) {
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    t.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+}
+
 function resetMatch() {
   const totalWidth = PITCH_WIDTH + PITCH_OFFSET_X * 2;
   const totalHeight = PITCH_HEIGHT + PITCH_OFFSET_Y * 2;
@@ -667,6 +682,10 @@ export function handleRemoteInput(msg) {
   } else if (msg.type === 'ball-sync') {
     Matter.Body.setPosition(ball, msg.pos);
     Matter.Body.setVelocity(ball, msg.vel);
+    if (msg.time !== undefined && !amIHost) {
+      // Sync local timer with host periodically to prevent drift
+      matchTimeMs = msg.time;
+    }
   } else if (msg.type === 'kick') {
     if (players[msg.id]) {
       players[msg.id].body.render.fillStyle = '#fff';

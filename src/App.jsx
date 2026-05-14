@@ -551,6 +551,7 @@ export default function App() {
             <span className="score-divider">VS</span>
             <span id="score-blue" style={{color:'var(--accent-blue)'}}>0</span>
           </div>
+          <div id="match-timer" style={{ position: 'absolute', top: '85px', left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.8)', fontSize: '20px', fontWeight: '800', textShadow: '0 2px 4px rgba(0,0,0,0.5)', zIndex: 10 }}>0:00</div>
           
           {isHost ? (
             <button className="btn-top-right pause-btn" onClick={togglePause}>
