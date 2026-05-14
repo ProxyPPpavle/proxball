@@ -394,7 +394,7 @@ export function initGame({ canvas, playerName, team, settings, peerId, allPlayer
       
       // BOOST Logic
       if (gameStaminaEnabled && keys['KeyE'] && lp.boost > 0) {
-        f *= 1.11; // 11% speed boost as requested
+        f *= 1.3; // 30% speed boost as requested
         lp.boost = Math.max(0, lp.boost - 1.2 * deltaScale); 
       } else {
         lp.boost = Math.min(100, lp.boost + 0.3 * deltaScale); 
